@@ -1,0 +1,9 @@
+resources:
+  target_url: 'http://configuration-manager:8080/cdim/api/v1/configuration-manager/resources'
+  timeout: 3601
+prometheus:
+  target_url: 'http://performance-collector:9090/-/reload'
+  timeout: 300
+exporter:
+  host: 'performance-exporter'
+  port: 8080

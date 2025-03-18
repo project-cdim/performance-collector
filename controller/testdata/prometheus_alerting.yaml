@@ -1,0 +1,34 @@
+global:
+  scrape_interval: 20s
+  scrape_timeout:  10s
+scrape_configs:
+  - job_name: '0001'
+    static_configs:
+      - targets: ['performance-exporter:8080']
+    metrics_path: '/cdim/api/v1/performance-exporter/devices/0001/metrics'
+  - job_name: '0002'
+    static_configs:
+      - targets: ['performance-exporter:8080']
+    metrics_path: '/cdim/api/v1/performance-exporter/devices/0002/metrics'
+  - job_name: '1001'
+    track_timestamps_staleness: false
+    scrape_interval: 10s
+    scrape_timeout: 10s
+    scrape_protocols:
+    - OpenMetricsText1.0.0
+    - OpenMetricsText0.0.1
+    - PrometheusText0.0.4
+    static_configs:
+      - targets: ['performance-exporter:8080']
+    metrics_path: '/cdim/api/v1/performance-exporter/devices/1001/metrics'
+  - job_name: '1002'
+    static_configs:
+      - targets: ['performance-exporter:8080']
+    metrics_path: '/cdim/api/v1/performance-exporter/devices/1002/metrics'
+
+remote_write:
+  - url: 'http://performance-manager:8428/api/v1/write'
+
+rule_files:
+  - /etc/prometheus/alert.rules
+
