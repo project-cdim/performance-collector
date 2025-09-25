@@ -1,17 +1,17 @@
 // Copyright (C) 2025 NEC Corporation.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License"); you may
 // not use this file except in compliance with the License. You may obtain
 // a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
 // WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 // License for the specific language governing permissions and limitations
 // under the License.
-        
+
 package controller
 
 import (
@@ -35,17 +35,17 @@ type result struct {
 	DeviceID []string `yaml:"deviceID"`
 }
 
-var stausToResponse = map[int]gin.H{
+var statusToResponse = map[int]gin.H{
 	http.StatusInternalServerError: {"code": "0001", "message": "Internal Server Error. Contact the administrator."},
 	http.StatusBadRequest:          {"code": "0002", "message": "Bad Request. Check the request parameters."},
 	http.StatusNotFound:            {"code": "0003", "message": "Not Found. Check the request URL."},
 }
 
 // GetResponseMessage returns a response message based on the provided HTTP status code.
-// It looks up the status code in the stausToResponse map and returns the corresponding response.
+// It looks up the status code in the statusToResponse map and returns the corresponding response.
 // If the status code is not found in the map, it panics with an "Unknown status code" message.
 func GetResponseMessage(status int) gin.H {
-	if response, ok := stausToResponse[status]; ok {
+	if response, ok := statusToResponse[status]; ok {
 		return response
 	}
 	panic("Unknown status code: " + strconv.Itoa(status))
