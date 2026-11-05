@@ -1,4 +1,4 @@
-// Copyright (C) 2025 NEC Corporation.
+// Copyright (C) 2025-2026 NEC Corporation.
 // 
 // Licensed under the Apache License, Version 2.0 (the "License"); you may
 // not use this file except in compliance with the License. You may obtain
@@ -15,6 +15,7 @@
 package controller
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -60,7 +61,7 @@ func Test_loadPerformanceCollector(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.args.settings = &model.PerformanceCollectorConfig{}
-			if err := loadPerformanceCollector(tt.args.filepath, tt.args.settings); (err != nil) != tt.wantErr {
+			if err := loadPerformanceCollector(context.Background(), tt.args.filepath, tt.args.settings); (err != nil) != tt.wantErr {
 				t.Errorf("loadConfig() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -98,7 +99,7 @@ func Test_loadPrometheusYaml(t *testing.T) {
 	for _, tt := range tests {
 		tt.args.prometheusConfig = &model.PrometheusConfig{}
 		t.Run(tt.name, func(t *testing.T) {
-			if err := loadPrometheusYaml(tt.args.filepath, tt.args.prometheusConfig); (err != nil) != tt.wantErr {
+			if err := loadPrometheusYaml(context.Background(), tt.args.filepath, tt.args.prometheusConfig); (err != nil) != tt.wantErr {
 				t.Errorf("loadPrometheusSettingFile() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -150,9 +151,10 @@ func Test_logAndRespondWithError(t *testing.T) {
 			gin.SetMode(gin.TestMode)
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest(http.MethodGet, "/test", nil)
 
 			// Execute the function
-			logAndRespondWithError(c, tc.expectedCode, "TestError", tc.err)
+			logAndRespondWithError(c.Request.Context(), c, tc.expectedCode, "TestError", tc.err)
 
 			// Verify the status code and response body
 			assert.Equal(t, tc.expectedCode, w.Code)

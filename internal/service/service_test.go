@@ -1,4 +1,4 @@
-// Copyright (C) 2025 NEC Corporation.
+// Copyright (C) 2025-2026 NEC Corporation.
 // 
 // Licensed under the Apache License, Version 2.0 (the "License"); you may
 // not use this file except in compliance with the License. You may obtain
@@ -15,6 +15,7 @@
 package service
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -72,7 +73,7 @@ func TestGetDeviceList(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := GetDeviceList(tt.args.resourcesUrl, 300, tt.args.deviceIds); (err != nil) != tt.wantErr {
+			if err := GetDeviceList(context.Background(), tt.args.resourcesUrl, 300, tt.args.deviceIds); (err != nil) != tt.wantErr {
 				t.Errorf("GetDeviceList() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -177,7 +178,7 @@ func TestRequestReload(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := RequestReload(tt.args.prometheusReloadUrl, 3000); (err != nil) != tt.wantErr {
+			if err := RequestReload(context.Background(), tt.args.prometheusReloadUrl, 3000); (err != nil) != tt.wantErr {
 				t.Errorf("RequestReload() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

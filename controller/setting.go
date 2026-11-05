@@ -1,4 +1,4 @@
-// Copyright (C) 2025 NEC Corporation.
+// Copyright (C) 2025-2026 NEC Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License"); you may
 // not use this file except in compliance with the License. You may obtain
@@ -15,6 +15,7 @@
 package controller
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -43,7 +44,7 @@ var statusToResponse = map[int]gin.H{
 
 // GetResponseMessage returns a response message based on the provided HTTP status code.
 // It looks up the status code in the statusToResponse map and returns the corresponding response.
-// If the status code is not found in the map, it panics with an "Unknown status code" message.
+// If the status code is not found in the map, it panics with an "Unknown status code" message
 func GetResponseMessage(status int) gin.H {
 	if response, ok := statusToResponse[status]; ok {
 		return response
@@ -53,9 +54,16 @@ func GetResponseMessage(status int) gin.H {
 
 // logAndRespondWithError logs the error information and sets the response body with an appropriate message.
 // It logs the error using the caller's information and the error message, then responds with a JSON message
-// based on the provided HTTP status code.
-func logAndRespondWithError(c *gin.Context, httpStatus int, caller string, err error) {
-	service.Log.Error(caller+" : "+err.Error(), false)
+// based on the provided HTTP status code
+//
+// Parameters:
+//   - ctx: context.Context. The context for logging.
+//   - c: *gin.Context. The gin context for the HTTP response.
+//   - httpStatus: int. The HTTP status code.
+//   - caller: string. The caller function name.
+//   - err: error. The error to log and respond with.
+func logAndRespondWithError(ctx context.Context, c *gin.Context, httpStatus int, caller string, err error) {
+	service.Log.ErrorWithContext(ctx, caller+" : "+err.Error(), false)
 	c.JSON(httpStatus, GetResponseMessage(httpStatus))
 }
 
@@ -69,39 +77,43 @@ func logAndRespondWithError(c *gin.Context, httpStatus int, caller string, err e
 // 4. Merges the existing scrape_configs with new configurations based on device IDs.
 // 5. Converts the updated configuration to YAML format.
 // 6. Writes the updated YAML configuration back to the file.
-// If any error occurs during these steps, it logs the error and responds with an appropriate HTTP status code.
+// If any error occurs during these steps, it logs the error and responds with an appropriate HTTP status code
+//
+// Parameters:
+//   - c: *gin.Context. The gin context for the HTTP request and response.
 func UpdatePrometheusYaml(c *gin.Context) {
-	service.Log.Info(c.Request.URL.Path + "[" + c.Request.Method + "] start.")
+	ctx := c.Request.Context()
+	service.Log.InfoWithContext(ctx, c.Request.URL.Path+"["+c.Request.Method+"] start.")
 
 	// Initialization of performance information collection configuration file
 	performanceCollectConfigSettings := model.NewPerformanceCollectorConfig()
 
 	// Load and Validation of the configuration file
-	err := loadPerformanceCollector(model.PerformanceCollectorConfigFilePath, performanceCollectConfigSettings)
+	err := loadPerformanceCollector(ctx, model.PerformanceCollectorConfigFilePath, performanceCollectConfigSettings)
 	if err != nil {
-		logAndRespondWithError(c, http.StatusInternalServerError, "UpdatePrometheusYaml() : loadPerformanceCollector", err)
+		logAndRespondWithError(ctx, c, http.StatusInternalServerError, "UpdatePrometheusYaml() : loadPerformanceCollector", err)
 		return
 	}
 	exporterUrl := performanceCollectConfigSettings.Exporter.Host + ":" + strconv.Itoa(performanceCollectConfigSettings.Exporter.Port)
 
 	// Load of the current prometheus.yml file
 	prometheusConfig := model.PrometheusConfig{}
-	err = loadPrometheusYaml(model.PrometheusYamlFilePath, &prometheusConfig)
+	err = loadPrometheusYaml(ctx, model.PrometheusYamlFilePath, &prometheusConfig)
 	if err != nil {
-		logAndRespondWithError(c, http.StatusInternalServerError, "UpdatePrometheusYaml() : loadPrometheusYaml", err)
+		logAndRespondWithError(ctx, c, http.StatusInternalServerError, "UpdatePrometheusYaml() : loadPrometheusYaml", err)
 		return
 	}
 
 	// Retrieve device list: Devices embedded in the node are needed, so they are obtained from the resource list.
 	resourcesUrl := performanceCollectConfigSettings.Resources.TargetUrl
 	var deviceIds []string
-	err = service.GetDeviceList(resourcesUrl, performanceCollectConfigSettings.Resources.TimeOut, &deviceIds)
+	err = service.GetDeviceList(ctx, resourcesUrl, performanceCollectConfigSettings.Resources.TimeOut, &deviceIds)
 	if err != nil {
-		logAndRespondWithError(c, http.StatusInternalServerError, "UpdatePrometheusYaml() : GetDeviceList", err)
+		logAndRespondWithError(ctx, c, http.StatusInternalServerError, "UpdatePrometheusYaml() : GetDeviceList", err)
 		return
 	}
 	if len(deviceIds) == 0 {
-		service.Log.Warn("UpdatePrometheusYaml() : GetDeviceList : deviceIds is empty")
+		service.Log.WarnWithContext(ctx, "UpdatePrometheusYaml() : GetDeviceList : deviceIds is empty")
 	}
 
 	// Since the number of devices can be enormous, a sort-merge method is used for faster processing.
@@ -157,33 +169,33 @@ func UpdatePrometheusYaml(c *gin.Context) {
 	// Convert the struct to a YAML formatted string
 	yamlData, err := yaml.Marshal(&prometheusConfig.PrometheusSettings)
 	if err != nil {
-		service.Log.Error(err.Error())
+		service.Log.ErrorWithContext(ctx, err.Error())
 
-		logAndRespondWithError(c, http.StatusInternalServerError, "UpdatePrometheusYaml() : yaml.Marshal", err)
+		logAndRespondWithError(ctx, c, http.StatusInternalServerError, "UpdatePrometheusYaml() : yaml.Marshal", err)
 		return
 	}
 
 	// Write to file
 	err = os.WriteFile(model.PrometheusYamlFilePath, yamlData, fs.FileMode(0o644))
 	if err != nil {
-		service.Log.Error(err.Error())
+		service.Log.ErrorWithContext(ctx, err.Error())
 
-		logAndRespondWithError(c, http.StatusInternalServerError, "UpdatePrometheusYaml() : os.WriteFile", err)
+		logAndRespondWithError(ctx, c, http.StatusInternalServerError, "UpdatePrometheusYaml() : os.WriteFile", err)
 		return
 	}
 
 	// Request reload to Prometheus
 	prometheusReloadUrl := performanceCollectConfigSettings.Prometheus.TargetUrl
-	err = service.RequestReload(prometheusReloadUrl, performanceCollectConfigSettings.Prometheus.TimeOut)
+	err = service.RequestReload(ctx, prometheusReloadUrl, performanceCollectConfigSettings.Prometheus.TimeOut)
 	if err != nil {
-		logAndRespondWithError(c, http.StatusInternalServerError, "UpdatePrometheusYaml() : RequestReload", err)
+		logAndRespondWithError(ctx, c, http.StatusInternalServerError, "UpdatePrometheusYaml() : RequestReload", err)
 		return
 	}
 
 	result := result{}
 	result.DeviceID = deviceIds
 
-	service.Log.Info(c.Request.URL.Path + "[" + c.Request.Method + "] completed successfully.")
+	service.Log.InfoWithContext(ctx, c.Request.URL.Path+"["+c.Request.Method+"] completed successfully.")
 
 	c.JSON(http.StatusOK, result)
 }
@@ -192,17 +204,25 @@ func UpdatePrometheusYaml(c *gin.Context) {
 // It reads the configuration settings related to performance collection, validates them, and initializes
 // the performance collector accordingly. This function ensures that all necessary settings are present
 // and correctly formatted before initializing the performance collector. If any required setting is missing
-// or invalid, it returns an error.
-func loadPerformanceCollector(filepath string, settings *model.PerformanceCollectorConfig) error {
+// or invalid, it returns an error
+//
+// Parameters:
+//   - ctx: context.Context. The context for logging.
+//   - filepath: string. The path to the configuration file.
+//   - settings: *model.PerformanceCollectorConfig. The struct to be populated with the configuration.
+//
+// Returns:
+//   - error: Returns an error if file reading, unmarshaling, or validation fails, nil otherwise.
+func loadPerformanceCollector(ctx context.Context, filepath string, settings *model.PerformanceCollectorConfig) error {
 	buf, err := os.ReadFile(filepath)
 	if err != nil {
-		service.Log.Error(err.Error())
+		service.Log.ErrorWithContext(ctx, err.Error())
 		return err
 	}
 
 	err = yaml.Unmarshal(buf, &settings)
 	if err != nil {
-		service.Log.Error(err.Error())
+		service.Log.ErrorWithContext(ctx, err.Error())
 		return err
 	}
 
@@ -212,7 +232,7 @@ func loadPerformanceCollector(filepath string, settings *model.PerformanceCollec
 	// Only absolute URIs or absolute paths are allowed.
 	_, err = url.ParseRequestURI(settings.Resources.TargetUrl)
 	if err != nil {
-		service.Log.Error(err.Error())
+		service.Log.ErrorWithContext(ctx, err.Error())
 		return err
 	}
 
@@ -227,7 +247,7 @@ func loadPerformanceCollector(filepath string, settings *model.PerformanceCollec
 	// Only absolute URIs or absolute paths are allowed.
 	_, err = url.ParseRequestURI(settings.Prometheus.TargetUrl)
 	if err != nil {
-		service.Log.Error(err.Error())
+		service.Log.ErrorWithContext(ctx, err.Error())
 		return err
 	}
 
@@ -252,17 +272,25 @@ func loadPerformanceCollector(filepath string, settings *model.PerformanceCollec
 // loadPrometheusYaml loads and validates the Prometheus configuration from a YAML file.
 // It checks for the presence of required settings such as global, remote_write, rule_files, and alerting.
 // If the scrape_configs setting is missing, it initializes it with an empty array to avoid subsequent reference errors.
-// The function returns an error if any of the required settings are missing or if there is an issue with loading the configuration.
-func loadPrometheusYaml(filepath string, prometheusConfig *model.PrometheusConfig) error {
+// The function returns an error if any of the required settings are missing or if there is an issue with loading the configuration
+//
+// Parameters:
+//   - ctx: context.Context. The context for logging.
+//   - filepath: string. The path to the YAML configuration file.
+//   - prometheusConfig: *model.PrometheusConfig. The struct to be populated with the configuration.
+//
+// Returns:
+//   - error: Returns an error if file reading, unmarshaling, or validation fails, nil otherwise.
+func loadPrometheusYaml(ctx context.Context, filepath string, prometheusConfig *model.PrometheusConfig) error {
 	buf, err := os.ReadFile(filepath)
 	if err != nil {
-		service.Log.Error(err.Error())
+		service.Log.ErrorWithContext(ctx, err.Error())
 		return err
 	}
 
 	err = yaml.Unmarshal(buf, &prometheusConfig.PrometheusSettings)
 	if err != nil {
-		service.Log.Error(err.Error())
+		service.Log.ErrorWithContext(ctx, err.Error())
 		return err
 	}
 
@@ -324,7 +352,7 @@ func loadPrometheusYaml(filepath string, prometheusConfig *model.PrometheusConfi
 
 // createNewJob creates a new job configuration for a given device ID and exporter URL.
 // It returns a map representing the job configuration, which includes the job name, static configurations with targets,
-// and the metrics path specific to the device.
+// and the metrics path specific to the device
 func createNewJob(deviceId string, exporterUrl string) map[string]any {
 	return map[string]any{
 		"job_name": deviceId,
